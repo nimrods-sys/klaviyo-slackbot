@@ -1,0 +1,13 @@
+services:
+  - type: worker
+    name: klaviyo-slack-bot
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_APP_TOKEN
+        sync: false
+      - key: KLAVIYO_API_KEY
+        sync: false

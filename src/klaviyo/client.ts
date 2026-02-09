@@ -20,6 +20,10 @@ export class KlaviyoClient {
     });
   }
 
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   async getCampaignsByDate(date: string): Promise<CampaignRevenue[]> {
     try {
       // Fetch campaigns with pagination (limited to recent campaigns only)
@@ -72,18 +76,23 @@ export class KlaviyoClient {
 
       console.log(`Filtered to ${campaignsOnDate.length} campaigns matching ${targetDateStr}`);
 
-      // Fetch revenue for each campaign
-      const campaignRevenuePromises = campaignsOnDate.map(async (campaign) => {
+      // Fetch revenue for each campaign sequentially to avoid rate limits
+      const results: CampaignRevenue[] = [];
+      for (const campaign of campaignsOnDate) {
         const revenue = await this.getCampaignRevenue(campaign.id, campaign.attributes.name, date);
-        return {
+        results.push({
           campaignId: campaign.id,
           campaignName: campaign.attributes.name,
           revenue,
           sendTime: campaign.attributes.send_time || campaign.attributes.scheduled_at,
-        };
-      });
+        });
 
-      const results = await Promise.all(campaignRevenuePromises);
+        // Add a small delay between requests to avoid rate limits
+        if (results.length < campaignsOnDate.length) {
+          await this.sleep(500); // 500ms delay between requests
+        }
+      }
+
       return results;
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -101,50 +110,77 @@ export class KlaviyoClient {
   }
 
   private async getCampaignRevenue(campaignId: string, campaignName: string, campaignDate: string): Promise<number> {
-    try {
-      console.log(`\n=== Fetching revenue for campaign: ${campaignName} ===`);
-      console.log(`Campaign ID: ${campaignId}`);
+    const maxRetries = 3;
+    let retryCount = 0;
 
-      // Get the Placed Order metric ID
-      const metricId = this.getPlacedOrderMetricId();
-      console.log(`Using Placed Order metric ID: ${metricId}`);
+    while (retryCount <= maxRetries) {
+      try {
+        if (retryCount > 0) {
+          console.log(`Retry attempt ${retryCount} for campaign: ${campaignName}`);
+        } else {
+          console.log(`\n=== Fetching revenue for campaign: ${campaignName} ===`);
+          console.log(`Campaign ID: ${campaignId}`);
+        }
 
-      // Use the correct POST endpoint for campaign values reports
-      const response = await this.client.post('/campaign-values-reports/', {
-        data: {
-          type: 'campaign-values-report',
-          attributes: {
-            statistics: ['conversions', 'conversion_uniques', 'conversion_value'],
-            filter: `equals(campaign_id,"${campaignId}")`,
-            conversion_metric_id: metricId,
-            timeframe: {
-              key: 'last_365_days'
+        // Get the Placed Order metric ID
+        const metricId = this.getPlacedOrderMetricId();
+        if (retryCount === 0) {
+          console.log(`Using Placed Order metric ID: ${metricId}`);
+        }
+
+        // Use the correct POST endpoint for campaign values reports
+        const response = await this.client.post('/campaign-values-reports/', {
+          data: {
+            type: 'campaign-values-report',
+            attributes: {
+              statistics: ['conversions', 'conversion_uniques', 'conversion_value'],
+              filter: `equals(campaign_id,"${campaignId}")`,
+              conversion_metric_id: metricId,
+              timeframe: {
+                key: 'last_365_days'
+              }
             }
           }
+        });
+
+        console.log('Campaign values response:', JSON.stringify(response.data, null, 2));
+
+        const results = response.data.data?.attributes?.results;
+        if (results && results.length > 0) {
+          const conversionValue = results[0]?.statistics?.conversion_value;
+          if (conversionValue !== undefined && conversionValue !== null) {
+            console.log(`✓ Revenue for "${campaignName}": $${conversionValue}`);
+            return conversionValue;
+          }
         }
-      });
 
-      console.log('Campaign values response:', JSON.stringify(response.data, null, 2));
+        console.log(`No revenue data found for campaign ${campaignName}`);
+        return 0;
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const status = error.response?.status;
 
-      const results = response.data.data?.attributes?.results;
-      if (results && results.length > 0) {
-        const conversionValue = results[0]?.statistics?.conversion_value;
-        if (conversionValue !== undefined && conversionValue !== null) {
-          console.log(`✓ Revenue for "${campaignName}": $${conversionValue}`);
-          return conversionValue;
+          // Handle rate limiting with retry
+          if (status === 429 && retryCount < maxRetries) {
+            const retryAfter = error.response?.data?.errors?.[0]?.detail?.match(/(\d+)\s+second/)?.[1];
+            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount) * 1000;
+
+            console.log(`Rate limited. Waiting ${waitTime}ms before retry...`);
+            await this.sleep(waitTime);
+            retryCount++;
+            continue;
+          }
+
+          console.error(`Error fetching revenue for campaign ${campaignName} (${campaignId}):`);
+          console.error('Status:', status);
+          console.error('Error data:', JSON.stringify(error.response?.data, null, 2));
         }
+        return 0;
       }
-
-      console.log(`No revenue data found for campaign ${campaignName}`);
-      return 0;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error(`Error fetching revenue for campaign ${campaignName} (${campaignId}):`);
-        console.error('Status:', error.response?.status);
-        console.error('Error data:', JSON.stringify(error.response?.data, null, 2));
-      }
-      return 0;
     }
+
+    console.error(`Failed to fetch revenue for ${campaignName} after ${maxRetries} retries`);
+    return 0;
   }
 
   async testConnection(): Promise<boolean> {
