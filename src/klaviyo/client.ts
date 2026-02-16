@@ -39,7 +39,7 @@ export class KlaviyoClient {
           nextUrl || '/campaigns',
           {
             params: nextUrl ? undefined : {
-              'filter': `equals(messages.channel,"email"),equals(status,"Sent")`,
+              'filter': `equals(status,"Sent")`,
             },
           }
         );
@@ -186,11 +186,7 @@ export class KlaviyoClient {
   async testConnection(): Promise<boolean> {
     try {
       // Test with campaigns endpoint since that's what we actually use
-      await this.client.get('/campaigns', {
-        params: {
-          'filter': 'equals(messages.channel,"email")',
-        },
-      });
+      await this.client.get('/campaigns');
       return true;
     } catch (error) {
       if (axios.isAxiosError(error)) {
