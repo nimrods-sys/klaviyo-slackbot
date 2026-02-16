@@ -28,30 +28,38 @@ export class KlaviyoClient {
     try {
       // Fetch campaigns with pagination (limited to recent campaigns only)
       let allCampaigns: any[] = [];
-      let nextUrl: string | undefined = undefined;
-      let pageCount = 0;
 
       const targetDateStr = new Date(date).toISOString().split('T')[0];
       console.log(`Looking for campaigns on date: ${targetDateStr}`);
 
-      do {
-        const response: { data: KlaviyoCampaignsResponse } = await this.client.get<KlaviyoCampaignsResponse>(
-          nextUrl || '/campaigns',
-          {
-            params: nextUrl ? undefined : {
-              'filter': `equals(status,"Sent")`,
-            },
+      // Fetch both email and SMS campaigns (Klaviyo requires channel filter)
+      const channels = ['email', 'sms'];
+
+      for (const channel of channels) {
+        let nextUrl: string | undefined = undefined;
+        let pageCount = 0;
+
+        console.log(`Fetching ${channel} campaigns...`);
+
+        do {
+          const response: { data: KlaviyoCampaignsResponse } = await this.client.get<KlaviyoCampaignsResponse>(
+            nextUrl || '/campaigns',
+            {
+              params: nextUrl ? undefined : {
+                'filter': `equals(messages.channel,"${channel}"),equals(status,"Sent")`,
+              },
+            }
+          );
+
+          if (response.data.data && response.data.data.length > 0) {
+            allCampaigns = allCampaigns.concat(response.data.data);
+            pageCount++;
+            console.log(`Fetched ${channel} page ${pageCount}: ${response.data.data.length} campaigns`);
           }
-        );
 
-        if (response.data.data && response.data.data.length > 0) {
-          allCampaigns = allCampaigns.concat(response.data.data);
-          pageCount++;
-          console.log(`Fetched page ${pageCount}: ${response.data.data.length} campaigns`);
-        }
-
-        nextUrl = response.data.links?.next;
-      } while (nextUrl && pageCount < 5); // Limit to 5 pages for faster performance
+          nextUrl = response.data.links?.next;
+        } while (nextUrl && pageCount < 5); // Limit to 5 pages per channel
+      }
 
       if (allCampaigns.length === 0) {
         console.log('No campaigns returned from Klaviyo API');
@@ -186,7 +194,11 @@ export class KlaviyoClient {
   async testConnection(): Promise<boolean> {
     try {
       // Test with campaigns endpoint since that's what we actually use
-      await this.client.get('/campaigns');
+      await this.client.get('/campaigns', {
+        params: {
+          'filter': 'equals(messages.channel,"email")',
+        },
+      });
       return true;
     } catch (error) {
       if (axios.isAxiosError(error)) {
