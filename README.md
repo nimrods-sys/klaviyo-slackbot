@@ -5,6 +5,7 @@ A Slack bot that integrates with Klaviyo's API to fetch campaign information and
 ## Features
 
 - Slash command interface: `/campaign-revenue YYYY-MM-DD`
+- `/emails-sent [YYYY-MM-DD]`: how many people were emailed on a day vs. the same weekday last year
 - Fetches all campaigns sent on a specific date
 - Displays revenue for each campaign
 - Shows total revenue across all campaigns
@@ -57,6 +58,10 @@ npm install
    - **Short Description**: "Get campaign revenue for a specific date"
    - **Usage Hint**: `YYYY-MM-DD` (e.g., 2024-01-15)
 4. Click "Save"
+5. Create a second command the same way:
+   - **Command**: `/emails-sent`
+   - **Short Description**: "People emailed on a day vs. same weekday last year"
+   - **Usage Hint**: `[YYYY-MM-DD]` (optional, defaults to today)
 
 ### 3. Get Klaviyo API Key
 
@@ -67,6 +72,7 @@ npm install
 5. Select the following permissions:
    - **Campaigns**: Read
    - **Metrics**: Read
+   - **Accounts**: Read (optional, lets `/emails-sent` use your account timezone)
 6. Click "Create"
 7. Copy the Private API Key (starts with `pk_`)
 
@@ -132,6 +138,28 @@ If no campaigns were sent on that date:
 No campaigns found for 2024-01-15.
 ```
 
+### Emails sent vs. last year
+
+```
+/emails-sent 2026-11-19
+```
+
+Compares the day with the **same weekday one year earlier** (52 weeks / 364 days back), so
+Thu Nov 19 2026 is compared with Thu Nov 20 2025:
+
+```
+📧 Emails sent: Thu, Nov 19, 2026 vs Thu, Nov 20, 2025
+Full day, America/New_York.
+
+People emailed: 412,345 vs 380,000  🔺 +8.5%
+Emails sent: 530,000 vs 560,000  🔻 -5.4%
+```
+
+- **People emailed** = unique profiles that received at least one email; **Emails sent** = total emails received.
+- Counts come from Klaviyo's "Received Email" metric, so both campaigns and flows are included.
+- With no date it uses today, and last year is counted only up to the same time of day so the comparison is fair.
+- A "day" is defined in `KLAVIYO_TIMEZONE` if set, otherwise the Klaviyo account timezone, otherwise UTC.
+
 ## Date Format
 
 - Use YYYY-MM-DD format (e.g., 2024-01-15)
@@ -171,8 +199,11 @@ klaviyo-slack-bot/
 │   ├── klaviyo/
 │   │   ├── client.ts         # Klaviyo API client
 │   │   └── types.ts          # TypeScript types
-│   └── slack/
-│       └── commands.ts       # Slash command handlers
+│   ├── slack/
+│   │   ├── commands.ts       # /campaign-revenue handler
+│   │   └── emailsSent.ts     # /emails-sent handler
+│   └── utils/
+│       └── dates.ts          # Date / timezone helpers
 ├── .env                      # Environment variables (not in git)
 ├── .env.example              # Template for env vars
 ├── package.json

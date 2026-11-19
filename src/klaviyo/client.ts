@@ -2,7 +2,9 @@ import axios, { AxiosInstance } from 'axios';
 import {
   KlaviyoCampaignsResponse,
   KlaviyoMetricAggregateResponse,
+  KlaviyoMetricsResponse,
   CampaignRevenue,
+  EmailVolume,
 } from './types';
 
 export class KlaviyoClient {
@@ -189,6 +191,104 @@ export class KlaviyoClient {
 
     console.error(`Failed to fetch revenue for ${campaignName} after ${maxRetries} retries`);
     return 0;
+  }
+
+  private receivedEmailMetricId?: string;
+
+  /** Retry a request on 429 rate limit responses with backoff. */
+  private async withRateLimitRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 429 && attempt < maxRetries) {
+          const retryAfterHeader = Number(error.response.headers?.['retry-after']);
+          const waitMs = retryAfterHeader > 0 ? retryAfterHeader * 1000 : Math.pow(2, attempt) * 1000;
+          console.log(`Rate limited. Waiting ${waitMs}ms before retry...`);
+          await this.sleep(waitMs);
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
+  /** Find (and cache) the ID of Klaviyo's built-in "Received Email" metric. */
+  private async getReceivedEmailMetricId(): Promise<string> {
+    if (this.receivedEmailMetricId) return this.receivedEmailMetricId;
+
+    let nextUrl: string | undefined = '/metrics';
+    while (nextUrl) {
+      const url: string = nextUrl;
+      const response = await this.withRateLimitRetry(() => this.client.get<KlaviyoMetricsResponse>(url));
+      const match = response.data.data.find(
+        (m) => m.attributes.name === 'Received Email' && (m.attributes.integration?.name ?? 'Klaviyo') === 'Klaviyo'
+      );
+      if (match) {
+        this.receivedEmailMetricId = match.id;
+        console.log(`Using Received Email metric ID: ${match.id}`);
+        return match.id;
+      }
+      nextUrl = response.data.links?.next ?? undefined;
+    }
+
+    throw new Error('Could not find the "Received Email" metric in this Klaviyo account.');
+  }
+
+  /**
+   * Count emails received (sent) between `start` (inclusive) and `end` (exclusive).
+   * Both are ISO 8601 timestamps with an explicit offset. Covers campaigns and flows.
+   * `timeZone` controls how Klaviyo buckets the results into days.
+   */
+  async getEmailVolume(start: string, end: string, timeZone: string): Promise<EmailVolume> {
+    try {
+      const metricId = await this.getReceivedEmailMetricId();
+
+      const response = await this.withRateLimitRetry(() =>
+        this.client.post<KlaviyoMetricAggregateResponse>('/metric-aggregates/', {
+          data: {
+            type: 'metric-aggregate',
+            attributes: {
+              metric_id: metricId,
+              measurements: ['count', 'unique'],
+              interval: 'day',
+              timezone: timeZone,
+              filter: [`greater-or-equal(datetime,${start})`, `less-than(datetime,${end})`],
+            },
+          },
+        })
+      );
+
+      const rows = response.data.data.attributes.data ?? [];
+      const sum = (values?: number[]) => (values ?? []).reduce((a, b) => a + (b ?? 0), 0);
+
+      // The window sits inside a single local day, so there is one day bucket and
+      // summing "unique" does not double count people.
+      const result = {
+        emailsSent: rows.reduce((total, row) => total + sum(row.measurements.count), 0),
+        uniqueRecipients: rows.reduce((total, row) => total + sum(row.measurements.unique), 0),
+      };
+      console.log(`Email volume ${start} -> ${end}:`, result);
+      return result;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        console.error('Klaviyo API error:', error.response?.data || error.message);
+        throw new Error(`Failed to fetch email volume: ${error.response?.data?.errors?.[0]?.detail || error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /** The account's timezone as configured in Klaviyo (needs the Accounts: Read scope). */
+  async getAccountTimezone(): Promise<string | undefined> {
+    try {
+      const response = await this.client.get('/accounts');
+      return response.data?.data?.[0]?.attributes?.timezone || undefined;
+    } catch (error) {
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      console.warn(`Could not read Klaviyo account timezone (status ${status ?? 'n/a'}).`);
+      return undefined;
+    }
   }
 
   async testConnection(): Promise<boolean> {

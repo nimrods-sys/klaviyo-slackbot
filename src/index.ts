@@ -2,6 +2,16 @@ import { App } from '@slack/bolt';
 import { config } from './config';
 import { KlaviyoClient } from './klaviyo/client';
 import { createCampaignRevenueHandler } from './slack/commands';
+import { createEmailsSentHandler } from './slack/emailsSent';
+
+function isValidTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function main() {
   console.log('Starting Klaviyo Campaign Revenue Slackbot...');
@@ -18,6 +28,14 @@ async function main() {
   }
   console.log('✓ Successfully connected to Klaviyo API');
 
+  // Timezone that defines a "day" for /emails-sent: KLAVIYO_TIMEZONE, else the Klaviyo account's, else UTC
+  let timeZone = config.klaviyo.timezone || (await klaviyoClient.getAccountTimezone()) || 'UTC';
+  if (!isValidTimezone(timeZone)) {
+    console.warn(`Invalid timezone "${timeZone}", falling back to UTC`);
+    timeZone = 'UTC';
+  }
+  console.log(`Using timezone: ${timeZone}`);
+
   // Initialize Slack app with Socket Mode
   const app = new App({
     token: config.slack.botToken,
@@ -27,12 +45,13 @@ async function main() {
 
   // Register slash command handler
   app.command('/campaign-revenue', createCampaignRevenueHandler(klaviyoClient));
+  app.command('/emails-sent', createEmailsSentHandler(klaviyoClient, timeZone));
 
   // Start the app
   await app.start();
 
   console.log('⚡️ Bolt app is running!');
-  console.log('Ready to receive /campaign-revenue commands');
+  console.log('Ready to receive /campaign-revenue and /emails-sent commands');
 }
 
 main().catch((error) => {

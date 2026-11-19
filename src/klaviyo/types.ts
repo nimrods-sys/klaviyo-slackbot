@@ -74,21 +74,42 @@ export interface KlaviyoMetricAggregateResponse {
     type: string;
     id: string;
     attributes: {
+      dates: string[];
       data: Array<{
-        attributes: {
-          metric_id: string;
-          campaign_id?: string;
-          flow_id?: string;
-          measurements: {
-            sum_value?: number;
-            count?: number;
-            unique?: number;
-          };
-          dimensions?: string[];
+        dimensions: string[];
+        measurements: {
+          sum_value?: number[];
+          count?: number[];
+          unique?: number[];
         };
       }>;
     };
   };
+}
+
+export interface KlaviyoMetric {
+  type: string;
+  id: string;
+  attributes: {
+    name: string;
+    integration?: {
+      name?: string;
+    } | null;
+  };
+}
+
+export interface KlaviyoMetricsResponse {
+  data: KlaviyoMetric[];
+  links?: {
+    next?: string | null;
+  };
+}
+
+export interface EmailVolume {
+  /** Unique profiles that received at least one email in the window. */
+  uniqueRecipients: number;
+  /** Total emails received in the window (a person can receive more than one). */
+  emailsSent: number;
 }
 
 export interface CampaignRevenue {
