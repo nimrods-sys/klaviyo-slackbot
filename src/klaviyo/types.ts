@@ -105,13 +105,6 @@ export interface KlaviyoMetricsResponse {
   };
 }
 
-export interface EmailVolume {
-  /** Unique profiles that received at least one email in the window. */
-  uniqueRecipients: number;
-  /** Total emails received in the window (a person can receive more than one). */
-  emailsSent: number;
-}
-
 export interface CampaignRevenue {
   campaignId: string;
   campaignName: string;

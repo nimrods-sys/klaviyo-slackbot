@@ -4,7 +4,6 @@ import {
   KlaviyoMetricAggregateResponse,
   KlaviyoMetricsResponse,
   CampaignRevenue,
-  EmailVolume,
 } from './types';
 
 export class KlaviyoClient {
@@ -236,22 +235,25 @@ export class KlaviyoClient {
   }
 
   /**
-   * Count emails received (sent) between `start` (inclusive) and `end` (exclusive).
-   * Both are ISO 8601 timestamps with an explicit offset. Covers campaigns and flows.
+   * Count unique people who received a campaign email between `start` (inclusive) and `end` (exclusive).
+   * Both are ISO 8601 timestamps with an explicit offset. Flow emails are excluded.
    * `timeZone` controls how Klaviyo buckets the results into days.
    */
-  async getEmailVolume(start: string, end: string, timeZone: string): Promise<EmailVolume> {
+  async getCampaignRecipients(start: string, end: string, timeZone: string): Promise<number> {
     try {
       const metricId = await this.getReceivedEmailMetricId();
 
+      // Group by flow: flow emails land in one row per flow, campaign emails (no flow)
+      // land in the row whose flow dimension is empty.
       const response = await this.withRateLimitRetry(() =>
         this.client.post<KlaviyoMetricAggregateResponse>('/metric-aggregates/', {
           data: {
             type: 'metric-aggregate',
             attributes: {
               metric_id: metricId,
-              measurements: ['count', 'unique'],
+              measurements: ['unique'],
               interval: 'day',
+              by: ['$flow'],
               timezone: timeZone,
               filter: [`greater-or-equal(datetime,${start})`, `less-than(datetime,${end})`],
             },
@@ -260,20 +262,24 @@ export class KlaviyoClient {
       );
 
       const rows = response.data.data.attributes.data ?? [];
-      const sum = (values?: number[]) => (values ?? []).reduce((a, b) => a + (b ?? 0), 0);
+      const campaignRows = rows.filter((row) => !row.dimensions?.[0]);
+      console.log(
+        `Received Email ${start} -> ${end}: ${rows.length} rows, flow dimensions:`,
+        rows.map((row) => row.dimensions?.[0] ?? '(none)')
+      );
 
       // The window sits inside a single local day, so there is one day bucket and
       // summing "unique" does not double count people.
-      const result = {
-        emailsSent: rows.reduce((total, row) => total + sum(row.measurements.count), 0),
-        uniqueRecipients: rows.reduce((total, row) => total + sum(row.measurements.unique), 0),
-      };
-      console.log(`Email volume ${start} -> ${end}:`, result);
-      return result;
+      const recipients = campaignRows.reduce(
+        (total, row) => total + (row.measurements.unique ?? []).reduce((a, b) => a + (b ?? 0), 0),
+        0
+      );
+      console.log(`Campaign recipients ${start} -> ${end}: ${recipients}`);
+      return recipients;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error('Klaviyo API error:', error.response?.data || error.message);
-        throw new Error(`Failed to fetch email volume: ${error.response?.data?.errors?.[0]?.detail || error.message}`);
+        throw new Error(`Failed to fetch campaign recipients: ${error.response?.data?.errors?.[0]?.detail || error.message}`);
       }
       throw error;
     }
