@@ -5,7 +5,7 @@ A Slack bot that integrates with Klaviyo's API to fetch campaign information and
 ## Features
 
 - Slash command interface: `/campaign-revenue YYYY-MM-DD`
-- `/emails-sent [YYYY-MM-DD]`: how many people were emailed on a day vs. the same weekday last year
+- `/emails-sent [YYYY-MM-DD]`: how many people campaigns emailed on a day vs. the same weekday last year
 - Fetches all campaigns sent on a specific date
 - Displays revenue for each campaign
 - Shows total revenue across all campaigns
@@ -60,7 +60,7 @@ npm install
 4. Click "Save"
 5. Create a second command the same way:
    - **Command**: `/emails-sent`
-   - **Short Description**: "People emailed on a day vs. same weekday last year"
+   - **Short Description**: "People emailed by campaigns vs. same weekday last year"
    - **Usage Hint**: `[YYYY-MM-DD]` (optional, defaults to today)
 
 ### 3. Get Klaviyo API Key
@@ -148,15 +148,17 @@ Compares the day with the **same weekday one year earlier** (52 weeks / 364 days
 Thu Nov 19 2026 is compared with Thu Nov 20 2025:
 
 ```
-📧 Emails sent: Thu, Nov 19, 2026 vs Thu, Nov 20, 2025
+📧 People emailed by campaigns: Thu, Nov 19, 2026 vs Thu, Nov 20, 2025
 Full day, America/New_York.
 
-People emailed: 412,345 vs 380,000  🔺 +8.5%
-Emails sent: 530,000 vs 560,000  🔻 -5.4%
+Thu, Nov 19, 2026: 412,345 people
+Thu, Nov 20, 2025: 380,000 people
+
+🟢 32,345 more people emailed than last year
 ```
 
-- **People emailed** = unique profiles that received at least one email; **Emails sent** = total emails received.
-- Counts come from Klaviyo's "Received Email" metric, so both campaigns and flows are included.
+- Counts unique people who received at least one **campaign** email that day. Flow emails are not counted.
+- 🟢 means more people than last year, 🔴 means fewer. A day with no campaign emails shows "none".
 - With no date it uses today, and last year is counted only up to the same time of day so the comparison is fair.
 - A "day" is defined in `KLAVIYO_TIMEZONE` if set, otherwise the Klaviyo account timezone, otherwise UTC.
 

@@ -1,6 +1,5 @@
 import { SlackCommandMiddlewareArgs, AllMiddlewareArgs } from '@slack/bolt';
 import { KlaviyoClient } from '../klaviyo/client';
-import { EmailVolume } from '../klaviyo/types';
 import {
   addDays,
   formatPrettyDate,
@@ -12,21 +11,21 @@ import {
 
 const numberFormat = new Intl.NumberFormat('en-US');
 
-function formatChange(current: number, previous: number): string {
-  if (previous === 0) return current === 0 ? '(no change)' : '(n/a, none last year)';
-  const pct = ((current - previous) / previous) * 100;
-  const arrow = pct > 0 ? '🔺' : pct < 0 ? '🔻' : '➖';
-  const sign = pct > 0 ? '+' : '';
-  return `${arrow} ${sign}${pct.toFixed(1)}%`;
+function formatPeople(count: number): string {
+  return count === 0 ? 'none' : `${numberFormat.format(count)} people`;
 }
 
-function formatLine(label: string, current: number, previous: number): string {
-  return `*${label}:* ${numberFormat.format(current)} vs ${numberFormat.format(previous)}  ${formatChange(current, previous)}`;
+function formatDifference(current: number, previous: number): string {
+  const diff = current - previous;
+  if (diff > 0) return `🟢 *${numberFormat.format(diff)} more people* emailed than last year`;
+  if (diff < 0) return `🔴 *${numberFormat.format(-diff)} fewer people* emailed than last year`;
+  return '⚪ Same number of people as last year';
 }
 
 /**
  * /emails-sent [YYYY-MM-DD]
- * Compares how many people we emailed on a day vs. the same weekday last year (364 days earlier).
+ * Compares how many people we emailed with campaigns on a day vs. the same weekday last year
+ * (364 days earlier). Flow emails are not counted.
  * Defaults to today. For today, last year is cut off at the same time of day so the comparison is fair.
  */
 export function createEmailsSentHandler(klaviyoClient: KlaviyoClient, timeZone: string) {
@@ -61,18 +60,21 @@ export function createEmailsSentHandler(klaviyoClient: KlaviyoClient, timeZone: 
     try {
       const thisYearWindow = window(date);
       const lastYearWindow = window(lastYearDate);
-      const current: EmailVolume = await klaviyoClient.getEmailVolume(thisYearWindow.start, thisYearWindow.end, timeZone);
-      const previous: EmailVolume = await klaviyoClient.getEmailVolume(lastYearWindow.start, lastYearWindow.end, timeZone);
+      const current = await klaviyoClient.getCampaignRecipients(thisYearWindow.start, thisYearWindow.end, timeZone);
+      const previous = await klaviyoClient.getCampaignRecipients(lastYearWindow.start, lastYearWindow.end, timeZone);
 
       const lines = [
-        `📧 *Emails sent: ${formatPrettyDate(date)} vs ${formatPrettyDate(lastYearDate)}*`,
+        `📧 *People emailed by campaigns: ${formatPrettyDate(date)} vs ${formatPrettyDate(lastYearDate)}*`,
         isToday ? `_Today so far (up to ${now.time.slice(0, 5)} ${timeZone}); last year is cut off at the same time._` : `_Full day, ${timeZone}._`,
         '',
-        formatLine('People emailed', current.uniqueRecipients, previous.uniqueRecipients),
-        formatLine('Emails sent', current.emailsSent, previous.emailsSent),
-        '',
-        '_Includes campaigns and flows (Klaviyo "Received Email" metric)._',
+        `${formatPrettyDate(date)}: *${formatPeople(current)}*`,
+        `${formatPrettyDate(lastYearDate)}: *${formatPeople(previous)}*`,
       ];
+      if (current === 0 && previous === 0) {
+        lines.push('', 'No campaigns sent on either day.');
+      } else {
+        lines.push('', formatDifference(current, previous));
+      }
 
       await respond({ text: lines.join('\n'), response_type: 'in_channel' });
     } catch (error) {
