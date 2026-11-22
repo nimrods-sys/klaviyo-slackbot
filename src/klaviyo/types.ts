@@ -118,7 +118,7 @@ export interface CampaignRates {
   openRate: number;
   /** Unique clicks / delivered. */
   clickRate: number;
-  /** Unique placed-order conversions / delivered. */
+  /** Unique placed-order conversions / unique clickers (click-to-order rate). */
   conversionRate: number;
 }
 
