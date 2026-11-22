@@ -40,11 +40,13 @@ async function getRatesOrNull(klaviyoClient: KlaviyoClient, start: string, end: 
   }
 }
 
-/** e.g. "🟢 *1,234 more people* opened" / "🔴 *56 fewer people* clicked". */
+/** e.g. "🟢 *1,234 more people* opened (+12.3%)" / "🔴 *56 fewer people* clicked (-4.0%)". */
 function formatDifference(current: number, previous: number, action: string): string {
   const diff = current - previous;
-  if (diff > 0) return `🟢 *${numberFormat.format(diff)} more people* ${action}`;
-  if (diff < 0) return `🔴 *${numberFormat.format(-diff)} fewer people* ${action}`;
+  // YoY change; left out when last year was 0 (no meaningful %).
+  const pct = previous > 0 ? ` (${diff > 0 ? '+' : ''}${((diff / previous) * 100).toFixed(1)}%)` : '';
+  if (diff > 0) return `🟢 *${numberFormat.format(diff)} more people* ${action}${pct}`;
+  if (diff < 0) return `🔴 *${numberFormat.format(-diff)} fewer people* ${action}${pct}`;
   return `⚪ Same number of people ${action}`;
 }
 

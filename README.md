@@ -156,10 +156,10 @@ Open rate 42.1% · CTR 1.85% · CVR 0.12%
 Thu, Nov 20, 2025: 380,000 people
 Open rate 40.3% · CTR 1.70% · CVR 0.10%
 
-🟢 32,345 more people emailed than last year
-🔴 1,200 fewer people opened
-🟢 640 more people clicked
-🟢 75 more people converted
+🟢 32,345 more people emailed than last year (+8.5%)
+🔴 1,200 fewer people opened (-0.8%)
+🟢 640 more people clicked (+9.4%)
+🟢 75 more people converted (+12.1%)
 ```
 
 - Counts unique people who received at least one **campaign** email that day. Flow emails are not counted.
