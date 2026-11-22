@@ -105,6 +105,19 @@ export interface KlaviyoMetricsResponse {
   };
 }
 
+export interface CampaignRates {
+  /** Number of email campaigns sent in the window. */
+  campaigns: number;
+  /** Emails delivered by those campaigns (the denominator for the rates). */
+  delivered: number;
+  /** Unique opens / delivered, as a fraction (0.42 = 42%). */
+  openRate: number;
+  /** Unique clicks / delivered. */
+  clickRate: number;
+  /** Unique placed-order conversions / delivered. */
+  conversionRate: number;
+}
+
 export interface CampaignRevenue {
   campaignId: string;
   campaignName: string;

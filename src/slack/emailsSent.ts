@@ -1,5 +1,6 @@
 import { SlackCommandMiddlewareArgs, AllMiddlewareArgs } from '@slack/bolt';
 import { KlaviyoClient } from '../klaviyo/client';
+import { CampaignRates } from '../klaviyo/types';
 import {
   addDays,
   formatPrettyDate,
@@ -13,6 +14,30 @@ const numberFormat = new Intl.NumberFormat('en-US');
 
 function formatPeople(count: number): string {
   return count === 0 ? 'none' : `${numberFormat.format(count)} people`;
+}
+
+function formatPercent(fraction: number, decimals: number): string {
+  return `${(fraction * 100).toFixed(decimals)}%`;
+}
+
+function formatRates(rates: CampaignRates | null): string | null {
+  if (!rates) return 'Open rate, CTR and CVR unavailable right now';
+  if (rates.delivered === 0) return null;
+  return [
+    `Open rate ${formatPercent(rates.openRate, 1)}`,
+    `CTR ${formatPercent(rates.clickRate, 2)}`,
+    `CVR ${formatPercent(rates.conversionRate, 2)}`,
+  ].join(' · ');
+}
+
+/** Rates are nice to have: if the report fails, still show the people counts. */
+async function getRatesOrNull(klaviyoClient: KlaviyoClient, start: string, end: string): Promise<CampaignRates | null> {
+  try {
+    return await klaviyoClient.getCampaignRates(start, end);
+  } catch (error) {
+    console.error('Could not fetch campaign rates:', error);
+    return null;
+  }
 }
 
 function formatDifference(current: number, previous: number): string {
@@ -62,18 +87,30 @@ export function createEmailsSentHandler(klaviyoClient: KlaviyoClient, timeZone: 
       const lastYearWindow = window(lastYearDate);
       const current = await klaviyoClient.getCampaignRecipients(thisYearWindow.start, thisYearWindow.end, timeZone);
       const previous = await klaviyoClient.getCampaignRecipients(lastYearWindow.start, lastYearWindow.end, timeZone);
+      const currentRates = current > 0 ? await getRatesOrNull(klaviyoClient, thisYearWindow.start, thisYearWindow.end) : null;
+      const previousRates = previous > 0 ? await getRatesOrNull(klaviyoClient, lastYearWindow.start, lastYearWindow.end) : null;
+
+      const dayLines = (d: string, people: number, rates: CampaignRates | null) => {
+        const lines = [`*${formatPrettyDate(d)}:* ${formatPeople(people)}`];
+        const ratesLine = people > 0 ? formatRates(rates) : null;
+        if (ratesLine) lines.push(ratesLine);
+        return lines;
+      };
 
       const lines = [
         `📧 *People emailed by campaigns: ${formatPrettyDate(date)} vs ${formatPrettyDate(lastYearDate)}*`,
         isToday ? `_Today so far (up to ${now.time.slice(0, 5)} ${timeZone}); last year is cut off at the same time._` : `_Full day, ${timeZone}._`,
         '',
-        `${formatPrettyDate(date)}: *${formatPeople(current)}*`,
-        `${formatPrettyDate(lastYearDate)}: *${formatPeople(previous)}*`,
+        ...dayLines(date, current, currentRates),
+        ...dayLines(lastYearDate, previous, previousRates),
       ];
       if (current === 0 && previous === 0) {
         lines.push('', 'No campaigns sent on either day.');
       } else {
         lines.push('', formatDifference(current, previous));
+      }
+      if (isToday && current > 0) {
+        lines.push('', '_Today\'s open, click and conversion rates are still coming in._');
       }
 
       await respond({ text: lines.join('\n'), response_type: 'in_channel' });

@@ -152,12 +152,17 @@ Thu Nov 19 2026 is compared with Thu Nov 20 2025:
 Full day, America/New_York.
 
 Thu, Nov 19, 2026: 412,345 people
+Open rate 42.1% · CTR 1.85% · CVR 0.12%
 Thu, Nov 20, 2025: 380,000 people
+Open rate 40.3% · CTR 1.70% · CVR 0.10%
 
 🟢 32,345 more people emailed than last year
 ```
 
 - Counts unique people who received at least one **campaign** email that day. Flow emails are not counted.
+- Open rate, CTR and CVR (Placed Order) cover all email campaigns sent that day, from Klaviyo's campaign
+  performance report: unique opens / clicks / orders divided by emails delivered. For today they are still
+  coming in, since people keep opening and clicking after the send.
 - 🟢 means more people than last year, 🔴 means fewer. A day with no campaign emails shows "none".
 - With no date it uses today, and last year is counted only up to the same time of day so the comparison is fair.
 - A "day" is defined in `KLAVIYO_TIMEZONE` if set, otherwise the Klaviyo account timezone, otherwise UTC.
