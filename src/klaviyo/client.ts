@@ -4,6 +4,7 @@ import {
   KlaviyoMetricAggregateResponse,
   KlaviyoMetricsResponse,
   CampaignRevenue,
+  CampaignRates,
 } from './types';
 
 export class KlaviyoClient {
@@ -280,6 +281,54 @@ export class KlaviyoClient {
       if (axios.isAxiosError(error)) {
         console.error('Klaviyo API error:', error.response?.data || error.message);
         throw new Error(`Failed to fetch campaign recipients: ${error.response?.data?.errors?.[0]?.detail || error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Open rate, click rate and conversion rate (Placed Order) across all email campaigns
+   * sent between `start` and `end` (ISO 8601 with offset). Uses Klaviyo's campaign values
+   * report, so the numbers match the campaign dashboard. Rates are combined across campaigns
+   * as total unique opens / clicks / conversions over total delivered.
+   */
+  async getCampaignRates(start: string, end: string): Promise<CampaignRates> {
+    try {
+      const response = await this.withRateLimitRetry(
+        () =>
+          this.client.post('/campaign-values-reports/', {
+            data: {
+              type: 'campaign-values-report',
+              attributes: {
+                statistics: ['delivered', 'opens_unique', 'clicks_unique', 'conversion_uniques'],
+                filter: 'equals(send_channel,"email")',
+                conversion_metric_id: this.getPlacedOrderMetricId(),
+                timeframe: { start, end },
+              },
+            },
+          }),
+        5
+      );
+
+      const results: Array<{ statistics?: Record<string, number | null> }> =
+        response.data?.data?.attributes?.results ?? [];
+      const total = (key: string) => results.reduce((sum, r) => sum + (r.statistics?.[key] ?? 0), 0);
+
+      const delivered = total('delivered');
+      const rate = (key: string) => (delivered > 0 ? total(key) / delivered : 0);
+      const rates: CampaignRates = {
+        campaigns: results.length,
+        delivered,
+        openRate: rate('opens_unique'),
+        clickRate: rate('clicks_unique'),
+        conversionRate: rate('conversion_uniques'),
+      };
+      console.log(`Campaign rates ${start} -> ${end}:`, rates);
+      return rates;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        console.error('Klaviyo API error:', error.response?.data || error.message);
+        throw new Error(`Failed to fetch campaign rates: ${error.response?.data?.errors?.[0]?.detail || error.message}`);
       }
       throw error;
     }
