@@ -110,6 +110,10 @@ export interface CampaignRates {
   campaigns: number;
   /** Emails delivered by those campaigns (the denominator for the rates). */
   delivered: number;
+  /** People who opened, clicked, and placed an order (unique profiles, summed across campaigns). */
+  opens: number;
+  clicks: number;
+  conversions: number;
   /** Unique opens / delivered, as a fraction (0.42 = 42%). */
   openRate: number;
   /** Unique clicks / delivered. */

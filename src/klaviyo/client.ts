@@ -319,6 +319,9 @@ export class KlaviyoClient {
       const rates: CampaignRates = {
         campaigns: results.length,
         delivered,
+        opens: total('opens_unique'),
+        clicks: total('clicks_unique'),
+        conversions: total('conversion_uniques'),
         openRate: rate('opens_unique'),
         clickRate: rate('clicks_unique'),
         conversionRate: rate('conversion_uniques'),
