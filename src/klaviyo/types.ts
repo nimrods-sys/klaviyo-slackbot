@@ -116,7 +116,7 @@ export interface CampaignRates {
   conversions: number;
   /** Unique opens / delivered, as a fraction (0.42 = 42%). */
   openRate: number;
-  /** Unique clicks / delivered. */
+  /** Unique clicks / unique opens (click-to-open rate). */
   clickRate: number;
   /** Unique placed-order conversions / unique clickers (click-to-order rate). */
   conversionRate: number;

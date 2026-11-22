@@ -152,9 +152,9 @@ Thu Nov 19 2026 is compared with Thu Nov 20 2025:
 Full day, America/New_York.
 
 Thu, Nov 19, 2026: 412,345 people
-Open rate 42.1% · CTR 1.85% · CVR 6.49%
+Open rate 42.1% · CTR 4.39% · CVR 6.49%
 Thu, Nov 20, 2025: 380,000 people
-Open rate 40.3% · CTR 1.70% · CVR 5.88%
+Open rate 40.3% · CTR 4.22% · CVR 5.88%
 
 🟢 32,345 more people emailed than last year (+8.5%)
 🔴 1,200 fewer people opened (-0.8%)
@@ -164,8 +164,9 @@ Open rate 40.3% · CTR 1.70% · CVR 5.88%
 
 - Counts unique people who received at least one **campaign** email that day. Flow emails are not counted.
 - Open rate, CTR and CVR cover all email campaigns sent that day, from Klaviyo's campaign performance report.
-  Open rate and CTR are unique opens / clicks divided by emails delivered. CVR is people who placed an order
-  (Placed Order, attributed by Klaviyo) divided by people who clicked. For today they are still coming in,
+  Each step is divided by the one before it: open rate = people who opened / emails delivered,
+  CTR = people who clicked / people who opened (click-to-open), CVR = people who placed an order
+  (Placed Order, attributed by Klaviyo) / people who clicked. For today they are still coming in,
   since people keep opening, clicking and ordering after the send.
 - The opened / clicked / converted lines compare unique openers, clickers and buyers across that day's campaigns
   (someone who opened two campaigns counts twice).
