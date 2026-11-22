@@ -40,11 +40,18 @@ async function getRatesOrNull(klaviyoClient: KlaviyoClient, start: string, end: 
   }
 }
 
-function formatDifference(current: number, previous: number): string {
+/** e.g. "🟢 *1,234 more people* opened" / "🔴 *56 fewer people* clicked". */
+function formatDifference(current: number, previous: number, action: string): string {
   const diff = current - previous;
-  if (diff > 0) return `🟢 *${numberFormat.format(diff)} more people* emailed than last year`;
-  if (diff < 0) return `🔴 *${numberFormat.format(-diff)} fewer people* emailed than last year`;
-  return '⚪ Same number of people as last year';
+  if (diff > 0) return `🟢 *${numberFormat.format(diff)} more people* ${action}`;
+  if (diff < 0) return `🔴 *${numberFormat.format(-diff)} fewer people* ${action}`;
+  return `⚪ Same number of people ${action}`;
+}
+
+/** Opens/clicks/conversions for a day: zero if nothing was sent, null if the rates report failed. */
+function engagement(people: number, rates: CampaignRates | null) {
+  if (people === 0) return { opens: 0, clicks: 0, conversions: 0 };
+  return rates;
 }
 
 /**
@@ -107,7 +114,16 @@ export function createEmailsSentHandler(klaviyoClient: KlaviyoClient, timeZone: 
       if (current === 0 && previous === 0) {
         lines.push('', 'No campaigns sent on either day.');
       } else {
-        lines.push('', formatDifference(current, previous));
+        lines.push('', formatDifference(current, previous, 'emailed than last year'));
+        const thisYear = engagement(current, currentRates);
+        const lastYear = engagement(previous, previousRates);
+        if (thisYear && lastYear) {
+          lines.push(
+            formatDifference(thisYear.opens, lastYear.opens, 'opened'),
+            formatDifference(thisYear.clicks, lastYear.clicks, 'clicked'),
+            formatDifference(thisYear.conversions, lastYear.conversions, 'converted')
+          );
+        }
       }
       if (isToday && current > 0) {
         lines.push('', '_Today\'s open, click and conversion rates are still coming in._');
