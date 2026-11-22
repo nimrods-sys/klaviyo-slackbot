@@ -287,10 +287,10 @@ export class KlaviyoClient {
   }
 
   /**
-   * Open rate, click rate and conversion rate (Placed Order) across all email campaigns
+   * Open rate, click-to-open rate and click-to-order conversion rate (Placed Order) across all email campaigns
    * sent between `start` and `end` (ISO 8601 with offset). Uses Klaviyo's campaign values
-   * report, so the numbers match the campaign dashboard. Rates are combined across campaigns
-   * as total unique opens / clicks / conversions over total delivered.
+   * report. Rates are combined across campaigns: open rate is unique opens / delivered, CTR is
+   * unique clicks / unique opens, and CVR is unique conversions / unique clicks.
    */
   async getCampaignRates(start: string, end: string): Promise<CampaignRates> {
     try {
@@ -323,8 +323,10 @@ export class KlaviyoClient {
         clicks: total('clicks_unique'),
         conversions: total('conversion_uniques'),
         openRate: rate('opens_unique'),
-        clickRate: rate('clicks_unique'),
-        conversionRate: rate('conversion_uniques'),
+        // CTR = people who clicked / people who opened (click-to-open rate), not / delivered.
+        clickRate: total('opens_unique') > 0 ? total('clicks_unique') / total('opens_unique') : 0,
+        // CVR = orders / people who clicked (click-to-order rate), not orders / delivered.
+        conversionRate: total('clicks_unique') > 0 ? total('conversion_uniques') / total('clicks_unique') : 0,
       };
       console.log(`Campaign rates ${start} -> ${end}:`, rates);
       return rates;
